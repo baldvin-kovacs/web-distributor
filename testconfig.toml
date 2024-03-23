@@ -1,0 +1,7 @@
+# use this for testing to not clutter /etc
+
+home = "home"
+acme_redirect_configs = "acme-redirect"
+
+[map]
+"www.example.com" = "127.0.0.1"
