@@ -19,3 +19,6 @@ You can also specify a different path for the configuration file like this: `web
 If you leave the defaults like this, you will have to manually include the configuration files to nginx. To do this, add the line `include /etc/web-distributor/nginx/*` to your nginx.conf.
 
 Every time you run this script with a new configuration, run `acme-redirect renew` afterwards. Depending on how you configured acme-redirect, also run `systemctl reload nginx`.
+
+# TODO
+- optional password authentication in config for some domains
