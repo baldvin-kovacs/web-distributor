@@ -176,10 +176,12 @@ fn main() {
     let config = read_config(&config_path);
 
     let timestring = format!(
-        "{:?}",
+        "{}",
         SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("couldn't get unix time")
+            .as_secs_f64()
+            .to_string()
     );
 
     generate_webserver_configs(&config, &timestring);
