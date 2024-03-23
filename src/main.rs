@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs::{self, create_dir_all, read_dir, rename};
 use std::io::ErrorKind;
 use std::path::Path;
+use std::time::SystemTime;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Config {
@@ -92,18 +93,20 @@ exec = [
     )
 }
 
-fn generate_webserver_configs(config: &Config) {
+fn generate_webserver_configs(config: &Config, timestring: &str) {
     let nginx_folder = Path::new(&config.home).join("nginx");
-    let old = Path::new(&config.home).join("nginx-old");
+    let archive = Path::new(&config.home).join(format!("nginx-old-{timestring}"));
+    let backup = Path::new(&config.home).join("nginx-old");
 
-    if let Err(e) = fs::remove_dir_all(&old) {
+    if let Err(e) = rename(&backup, &archive) {
         if e.kind().ne(&ErrorKind::NotFound) {
-            panic!("couldn't delete nginx-old folder");
+            panic!("couldn't move {:?} to {:?}", &backup, &archive);
         }
     }
-    if let Err(e) = rename(&nginx_folder, &old) {
+
+    if let Err(e) = rename(&nginx_folder, &backup) {
         if e.kind().ne(&ErrorKind::NotFound) {
-            panic!("couldn't move nginx folder to nginx-old {}", e);
+            panic!("couldn't move {:?} to {:?}", &backup, &archive);
         }
     }
 
@@ -118,21 +121,27 @@ fn generate_webserver_configs(config: &Config) {
     }
 }
 
-fn generate_acme_redirect_config(config: &Config) {
+fn generate_acme_redirect_config(config: &Config, timestring: &str) {
     let acme_path: &Path = Path::new(&config.acme_redirect_configs);
-    let old = acme_path.join("old");
+    let backup = acme_path.join("web-distributor-old");
+    let archive = acme_path.join(format!("web-distributor-old-{timestring}"));
 
-    if let Err(e) = fs::remove_dir_all(&old) {
+    if let Err(e) = rename(&backup, &archive) {
         if e.kind().ne(&ErrorKind::NotFound) {
-            panic!("couldn't delete acme-redirect.d/old");
+            panic!("couldn't move {:?} to {:?}", &backup, &archive);
         }
     }
-    create_dir_all(&old).unwrap();
+
+    create_dir_all(&backup).unwrap();
 
     let dir_entries = read_dir(acme_path).unwrap();
     for f in dir_entries {
         let entry = f.unwrap();
-        if entry.file_name() == "old"
+        if entry
+            .file_name()
+            .to_str()
+            .unwrap()
+            .starts_with("web-distributor-old")
             || !entry
                 .file_name()
                 .to_str()
@@ -143,7 +152,7 @@ fn generate_acme_redirect_config(config: &Config) {
         }
         rename(
             acme_path.join(entry.file_name()),
-            old.join(entry.file_name()),
+            backup.join(entry.file_name()),
         )
         .unwrap();
     }
@@ -166,7 +175,14 @@ fn main() {
 
     let config = read_config(&config_path);
 
-    generate_webserver_configs(&config);
+    let timestring = format!(
+        "{:?}",
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("couldn't get unix time")
+    );
 
-    generate_acme_redirect_config(&config);
+    generate_webserver_configs(&config, &timestring);
+
+    generate_acme_redirect_config(&config, &timestring);
 }
