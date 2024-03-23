@@ -1,3 +1,5 @@
+home = "/etc/web-distributor"
+acme_redirect_configs = "/etc/acme-redirect.d"
+
 [map]
-"roaringmind.net" = "192.168.2.58"
-"www.roaringmind.net" = "192.168.2.58"
+"www.example.com" = "127.0.0.1"
