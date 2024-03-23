@@ -38,14 +38,6 @@ fn read_config(config_path: &Path) -> Config {
 fn nginx_proxy_build(from: &str, to: &str) -> String {
     format!(
 "server {{
-          listen 80;
-          listen [::]:80;
-  
-          server_name {from};
-  
-          return 301 https://$server_name$request_uri;
-}}
-server {{
         listen 443 ssl http2;
         listen [::]:443 ssl http2;
 
@@ -70,11 +62,16 @@ server {{
 
 
         location / {{
-                proxy_pass {to};
-                proxy_set_header Host $host;
+                proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header X-Scheme $scheme;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection \"Upgrade\";
+                client_max_body_size 0;
+
+                proxy_pass http://{to}/;
         }}
 }}")
 }
