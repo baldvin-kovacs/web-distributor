@@ -1,5 +1,5 @@
-home = "home"
-acme_redirect_configs = "acme"
+home = "/etc/web-distributor"
+acme_redirect_configs = "/etc/acme-redirect.d"
 
 [routes]
 "example.com" = "127.0.0.1"

@@ -1,7 +1,13 @@
 # use this for testing to not clutter /etc
 
 home = "home"
-acme_redirect_configs = "acme-redirect"
+acme_redirect_configs = "acme"
 
-[map]
-"www.example.com" = "127.0.0.1"
+[routes]
+"example.com" = "127.0.0.1"
+"example.org" = "127.0.0.2"
+
+
+
+[login_groups]
+"example.com" = "my_login_group"
