@@ -1,5 +1,11 @@
-home = "/etc/web-distributor"
-acme_redirect_configs = "/etc/acme-redirect.d"
+home = "home"
+acme_redirect_configs = "acme"
 
-[map]
-"www.example.com" = "127.0.0.1"
+[routes]
+"example.com" = "127.0.0.1"
+"example.org" = "127.0.0.2"
+
+
+
+[login_groups]
+"example.com" = "my_login_group"
