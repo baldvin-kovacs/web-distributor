@@ -147,6 +147,7 @@ fn generate_webserver_configs(config: &Config, timestring: &str) {
         let access_str = if config.login_groups.contains_key(source) {
             Some(
                 Path::new(&config.home)
+                    .join("login_groups")
                     .join(config.login_groups.get(source).unwrap())
                     .to_str()
                     .unwrap()
