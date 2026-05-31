@@ -35,6 +35,10 @@ enum Commands {
         #[command(subcommand)]
         pwcommands: PasswordCommands,
     },
+    ForwardAuth {
+        #[command(subcommand)]
+        command: ForwardAuthCommands,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -70,12 +74,33 @@ enum PasswordCommands {
     },
 }
 
+#[derive(Subcommand, Debug)]
+enum ForwardAuthCommands {
+    Apply {
+        domain: String,
+        outpost: String,
+
+        #[arg(short, long)]
+        force: bool,
+    },
+    Disable {
+        domain: String,
+    },
+    List {},
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct Config {
     home: String,
     acme_redirect_configs: String,
     routes: HashMap<String, String>,
+    #[serde(default)]
     login_groups: HashMap<String, String>,
+    // domain -> Authentik outpost upstream (host:port), e.g. "10.248.36.36:9000".
+    // Domains listed here are gated with nginx auth_request forward-auth via
+    // that outpost. Mutually exclusive in practice with a login_group.
+    #[serde(default)]
+    forward_auth: HashMap<String, String>,
 }
 
 fn read_config(config_path: &Path) -> Config {
@@ -88,6 +113,7 @@ fn read_config(config_path: &Path) -> Config {
                     acme_redirect_configs: "/etc/acme-redirect.d".to_string(),
                     routes: HashMap::new(),
                     login_groups: HashMap::new(),
+                    forward_auth: HashMap::new(),
                 };
                 write_config(&config, &config_path);
                 config
@@ -99,25 +125,37 @@ fn read_config(config_path: &Path) -> Config {
     }
 }
 
-fn nginx_proxy_build(from: &str, to: &str, login_group_path: Option<String>) -> String {
-    match login_group_path {
+fn nginx_proxy_build(
+    from: &str,
+    to: &str,
+    login_group_path: Option<String>,
+    forward_auth_outpost: Option<String>,
+) -> String {
+    let login_group = match login_group_path {
         Some(lg) => format!(
-            include_str!("nginx.conf"),
-            from = from,
-            to = to,
-            login_group = format!(
-                "auth_basic \"login\";
+            "auth_basic \"login\";
         auth_basic_user_file {};",
-                lg
-            )
+            lg
         ),
-        None => format!(
-            include_str!("nginx.conf"),
-            from = from,
-            to = to,
-            login_group = ""
+        None => String::new(),
+    };
+
+    let (auth_request, auth_outpost) = match forward_auth_outpost {
+        Some(outpost) => (
+            include_str!("nginx-authrequest.conf").to_string(),
+            format!(include_str!("nginx-outpost.conf"), outpost = outpost),
         ),
-    }
+        None => (String::new(), String::new()),
+    };
+
+    format!(
+        include_str!("nginx.conf"),
+        from = from,
+        to = to,
+        login_group = login_group,
+        auth_request = auth_request,
+        auth_outpost = auth_outpost,
+    )
 }
 
 fn acme_redirect_config_build(namespace: &str) -> String {
@@ -156,9 +194,10 @@ fn generate_webserver_configs(config: &Config, timestring: &str) {
         } else {
             None
         };
+        let forward_auth = config.forward_auth.get(source).cloned();
         fs::write(
             nginx_folder.join(format!("{}.nginx", source)),
-            nginx_proxy_build(&source, &target, access_str),
+            nginx_proxy_build(&source, &target, access_str, forward_auth),
         )
         .unwrap();
     }
@@ -394,6 +433,40 @@ fn main() {
                 config.login_groups.remove(domain);
                 write_config(&config, &config_path);
                 // here regenerate
+            }
+        },
+        Commands::ForwardAuth { command } => match command {
+            ForwardAuthCommands::Apply {
+                domain,
+                outpost,
+                force,
+            } => {
+                if !config.routes.contains_key(domain) {
+                    eprintln!("No route with source domain {domain} exists");
+                    exit(1);
+                }
+                if config.forward_auth.contains_key(domain) && !force {
+                    eprintln!("Forward-auth is already configured for {domain}. To override, use --force.");
+                    exit(1);
+                }
+                config
+                    .forward_auth
+                    .insert(domain.to_string(), outpost.to_string());
+                write_config(&config, config_path);
+            }
+            ForwardAuthCommands::Disable { domain } => {
+                if !config.forward_auth.contains_key(domain) {
+                    eprintln!("No forward-auth is configured for {domain}");
+                    exit(1);
+                }
+                config.forward_auth.remove(domain);
+                write_config(&config, config_path);
+            }
+            ForwardAuthCommands::List {} => {
+                for (domain, outpost) in &config.forward_auth {
+                    println!("{domain} => {outpost}");
+                }
+                exit(0);
             }
         },
         Commands::List {} => {
